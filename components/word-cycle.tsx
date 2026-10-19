@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const WORDS = ["Lovable app", "Bolt project", "v0 component", "ZIP file"];
+const WORDS = ["landing page", "portfolio", "promo site", "HTML page"];
 
 export default function WordCycle() {
   const [index, setIndex] = useState(0);

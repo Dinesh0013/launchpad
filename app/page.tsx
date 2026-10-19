@@ -165,7 +165,7 @@ export default function HomePage() {
               number={1}
               icon={Upload}
               title="Upload or paste"
-              description="Paste a link, upload a ZIP, or connect GitHub"
+              description="Paste your website code and press deploy"
             />
             <Step
               number={2}

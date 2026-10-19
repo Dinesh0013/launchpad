@@ -1,6 +1,6 @@
 # LaunchPad
 
-LaunchPad lets you deploy websites in under 30 seconds — drop a ZIP, paste a Lovable/Bolt/v0 link, or connect a GitHub repo, and get a live HTTPS URL instantly. It handles building, deploying to Cloudflare Pages, custom domains, and email notifications with no technical setup required.
+LaunchPad lets you deploy websites in under 30 seconds — paste your website HTML and get a live HTTPS URL instantly. It handles building, deploying to Cloudflare Pages, custom domains, and email notifications with no technical setup required.
 
 ---
 
@@ -130,9 +130,7 @@ app/
   api/
     deploy/route.ts           # POST — trigger Cloudflare deployment
     ingest/
-      upload/route.ts         # POST — ZIP / HTML file upload
-      url/route.ts            # POST — URL / Lovable / Bolt ingest
-      github/route.ts         # POST — GitHub repo ingest
+      html/route.ts           # POST — pasted HTML ingest
     domains/
       search/route.ts         # GET  — domain availability search
       connect/route.ts        # POST — connect custom domain
@@ -174,7 +172,7 @@ GitHub Pages cannot host this app (it needs a Node.js server for auth, API route
    - Optional: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `RESEND_API_KEY`. Without real Cloudflare keys, deploys run in mock mode.
 3. In Supabase → **Authentication → URL Configuration**, set Site URL to your Vercel URL and add `<your-url>/auth/callback` to Redirect URLs.
 
-Note: ZIP and link builds run `npm install` and a build inside the API route (up to 300s). Vercel plans limit function duration and memory, so heavy builds may fail there. A long-running Node host such as Railway or Fly.io suits that better.
+Note: the deploy route allows up to 300s per request. Check that your Vercel plan supports that duration.
 
 ---
 

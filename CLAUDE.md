@@ -1,8 +1,8 @@
 # LaunchPad — Claude Code context
 
 ## What this project is
-LaunchPad turns Lovable / Bolt / V0 output into a live Cloudflare Pages site for
-non-technical users. Users paste a GitHub repo URL or upload a ZIP and get a
+LaunchPad turns pasted HTML website code into a live Cloudflare Pages site for
+non-technical users. Users paste their website HTML into a text box and get a
 deployed site in under 60 seconds. Hard cap: 20 sites per user.
 
 ## Stack
@@ -19,13 +19,11 @@ The app requires a Node.js host (Vercel, Railway, Fly.io, etc.) — NOT Cloudfla
 Pages/Workers, because server-side routes need child_process and filesystem access
 for the upcoming build engine.
 
-## Input methods (UI)
-- GitHub URL    →  POST /api/ingest/github   (downloads repo ZIP, extracts with root-strip, stores to Supabase Storage)
-- ZIP upload    →  POST /api/ingest/upload   (extracts ZIP with root-strip, or stores HTML; uploads to Supabase Storage)
-- Paste a link  →  POST /api/ingest/url      (fetches HTML + same-origin assets, bundles, form-checks, stores) — re-enabled in P3
-  - risk='backend' form detected → 200 + { warning:'BACKEND_FORM', message } — UI shows inline amber warning, deploy still proceeds
-  - falls back to Cloudflare Pages _redirects if asset fetch fails
-  - source_type values: 'zip' | 'github' | 'lovable' | 'bolt' | 'v0' | 'lovable_bundled' | 'url'
+## Input method (UI)
+Only one: paste HTML into a textarea on /dashboard/new → POST /api/ingest/html ({ html, project_name }, max 2 MB).
+The route stores it as index.html in Supabase Storage. GitHub, ZIP and "paste a link" ingest were removed on purpose.
+- risk='backend' form detected → 200 + { warning:'BACKEND_FORM', message } — UI shows inline amber warning, deploy still proceeds
+- source_type is 'html'
 
 ## Cloudflare Pages deploy strategy
 **CF Pages build-from-source is NOT used and NOT available.**
@@ -37,7 +35,7 @@ All deployments are pre-built static file uploads:
    in a temp directory, then upload the built `dist/` output via this same path.
 
 ## Deploy flow (current)
-1. User submits GitHub URL, ZIP, or pasted link via /dashboard/new
+1. User pastes HTML via /dashboard/new
 2. Ingest API validates, enforces 20-project cap, stores files to Supabase Storage,
    creates project row (status='building')
 3. Client fires POST /api/deploy (non-blocking) and navigates to /deploy/[project_id]
@@ -80,15 +78,13 @@ Set BUILD_TIMEOUT_MS env var to override the 180s per-command timeout.
 ## Logging
 - build_logs table: per-project, per-deployment log rows with stage + level + message.
 - lib/logger.ts: logBuild() inserts a row + emits console.{level}. Never throws.
-- Sentry: captureException() in catch blocks of ingest/github, ingest/upload, deploy routes.
+- Sentry: captureException() in catch blocks of ingest/html and deploy routes.
 
 ## Key files
-- app/dashboard/new/page.tsx              → new project form (GitHub URL + Upload ZIP + Paste a link tabs)
+- app/dashboard/new/page.tsx              → new project form (paste HTML)
 - app/deploy/[project_id]/page.tsx        → deployment progress page
 - components/deploy/DeployProgress.tsx    → 7-stage animated progress component
-- app/api/ingest/github/route.ts          → GitHub URL ingestion
-- app/api/ingest/upload/route.ts          → ZIP/HTML upload ingestion
-- app/api/ingest/url/route.ts             → URL paste ingestion (Lovable/Bolt/v0/any URL) — active since P3
+- app/api/ingest/html/route.ts            → pasted HTML ingestion
 - app/api/deploy/route.ts                 → Cloudflare Pages deployment
 - app/api/projects/[id]/status/route.ts   → status polling endpoint
 - lib/cloudflare.ts                       → Cloudflare API wrapper (cfBase() lazy getter)
@@ -97,7 +93,6 @@ Set BUILD_TIMEOUT_MS env var to override the 180s per-command timeout.
 - lib/api-auth.ts                         → requireAuth() — uses getUser() (JWT-validated)
 - lib/subdomain.ts                        → subdomain generation + uniqueness check
 - lib/formcheck.ts                        → detectBackendForm() — classifies form risk (none/external/backend)
-- lib/zip.ts                              → getCommonRoot() + stripRoot() — shared ZIP root-strip logic
 - supabase/migrations/001_initial_schema.sql → profiles, projects, deployments, domain_searches
 - supabase/migrations/002_logging_and_limits.sql → build_logs, deployments.stage column
 
@@ -115,13 +110,10 @@ Set BUILD_TIMEOUT_MS env var to override the 180s per-command timeout.
 | tests/smoke.spec.ts | Landing page renders, branding, features section, "Ship in three steps" copy | Browser, always runs |
 | tests/logger.spec.ts | build_logs table insert + read-back via Supabase REST | Skips if migration 002 not applied or no Supabase credentials |
 | tests/builder.spec.ts | Framework detection, real Vite build (Fixture A), SSR rejection, next-static detection | Node-based, Fixture A allowed 180s |
-| tests/zip.spec.ts | getCommonRoot + stripRoot (9 cases) | Node-based, no browser |
 | tests/formcheck.spec.ts | detectBackendForm risk classification (8 cases) | Node-based, no browser |
 | tests/deploy-idempotency.spec.ts | CF project creation skipped on redeploy (mock Supabase) | Node-based |
 | tests/progress.spec.ts | setStatus helper: projects + deployments + build_logs updates (9 cases) | Node-based, mock Supabase |
-| tests/e2e-zip.spec.ts | ZIP upload flow: tab UI, file input, ingest submit, progress stages, success card, log panel | Browser E2E — skips if TEST_USER_EMAIL/PASSWORD not set |
-| tests/e2e-url.spec.ts | URL paste flow: tab UI, URL input, clean submit, BACKEND_FORM warning, continue, live progress | Browser E2E — skips if TEST_USER_EMAIL/PASSWORD not set |
-| tests/e2e-error.spec.ts | SSR error, deploy failure UI, Try again routing, project limit error | Browser E2E — skips if TEST_USER_EMAIL/PASSWORD not set |
+| tests/e2e-error.spec.ts | SSR error, deploy failure UI, Try again routing, project limit error (paste-HTML flow) | Browser E2E — skips if TEST_USER_EMAIL/PASSWORD not set |
 
 E2E tests use Playwright route interception (page.route) — no real CF or Supabase API calls are made inside
 the browser during E2E tests. However, both /dashboard and /deploy layouts call supabase.auth.getUser()
@@ -165,28 +157,21 @@ logger.spec.ts requires migration 002 applied to local Supabase:
 - ALWAYS use supabase.auth.getUser() in API routes
 - NEVER use getSession() — it does not verify the JWT
 
-### 6. ZIP top-level folder stripping
-- Both ingest/upload and ingest/github must use
-  stripCommonRoot from lib/zip.ts
-- NEVER remove stripCommonRoot from either route
-
 ## Guardrails — never do these
 - Commit .env or .env.local
 - Change shadcn component internals directly
 - Use supabase.auth.getSession() in API routes — always use getUser() (enforced in requireAuth)
-- Delete /api/ingest/url/route.ts — it is active and handles the "Paste a link" flow since P3
 - Assume CF Pages build-from-source is available — it is not; all deploys are server-side builds
   uploaded as pre-built static files via the CF Pages multipart FormData API
 - Deploy the Next.js app itself to Cloudflare Pages/Workers — Node.js runtime required (child_process
   and filesystem access needed for the build engine)
-- Host must allow ≥300s function timeout (all three ingest routes + deploy route set maxDuration=300).
+- Host must allow ≥300s function timeout (the deploy route sets maxDuration=300).
   If platform caps lower (e.g. Vercel Hobby = 60s), the build engine must move to a background worker.
   BUILD_TIMEOUT_MS env var controls the per-step build timeout (default 180s).
-- Exceed MAX_PROJECTS_PER_USER = 20 — enforced in all three ingest routes (lib/limits.ts)
-- BACKEND_FORM warning: URL ingest returns { warning:'BACKEND_FORM', message } when a backend-wired
+- Exceed MAX_PROJECTS_PER_USER = 20 — enforced in the ingest route (lib/limits.ts)
+- BACKEND_FORM warning: html ingest returns { warning:'BACKEND_FORM', message } when a backend-wired
   form is detected; deploy still proceeds — the warning is informational only
-- source_type valid values: 'zip' | 'github' | 'lovable' | 'bolt' | 'v0' | 'lovable_bundled' | 'url'
-  (lovable_bundled is set after fetchAndBundle succeeds; url is the fallback for unknown hostnames)
+- source_type valid value: 'html'
 
 ## Custom Domain
 

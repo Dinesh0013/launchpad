@@ -23,7 +23,7 @@ test("T1 — SSR_UNSUPPORTED error shown inline on new project page", async ({
     return;
   }
 
-  await page.route(/\/api\/ingest\/upload/, async (route) => {
+  await page.route(/\/api\/ingest\/html/, async (route) => {
     await route.fulfill({
       status: 422,
       contentType: "application/json",
@@ -35,13 +35,7 @@ test("T1 — SSR_UNSUPPORTED error shown inline on new project page", async ({
   });
 
   await page.goto("/dashboard/new");
-  await page.getByText("Upload ZIP").click();
-
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "test-app.zip",
-    mimeType: "application/zip",
-    buffer: Buffer.from("PK\x05\x06" + "\x00".repeat(18)),
-  });
+  await page.getByLabel("Website code").fill("<!DOCTYPE html><html><body>Hello</body></html>");
 
   await expect(
     page.getByRole("button", { name: /deploy now/i }),
@@ -150,7 +144,7 @@ test("T4 — Project limit error shown inline on new project page", async ({
     return;
   }
 
-  await page.route(/\/api\/ingest\/upload/, async (route) => {
+  await page.route(/\/api\/ingest\/html/, async (route) => {
     await route.fulfill({
       status: 403,
       contentType: "application/json",
@@ -162,13 +156,7 @@ test("T4 — Project limit error shown inline on new project page", async ({
   });
 
   await page.goto("/dashboard/new");
-  await page.getByText("Upload ZIP").click();
-
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "test-app.zip",
-    mimeType: "application/zip",
-    buffer: Buffer.from("PK\x05\x06" + "\x00".repeat(18)),
-  });
+  await page.getByLabel("Website code").fill("<!DOCTYPE html><html><body>Hello</body></html>");
 
   await expect(
     page.getByRole("button", { name: /deploy now/i }),

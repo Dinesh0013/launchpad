@@ -16,7 +16,7 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "LaunchPad — Your site, live in 30 seconds",
   description:
-    "Deploy sites built with Lovable, Bolt, v0, or any ZIP file. Real URL, HTTPS, and custom domain in under a minute.",
+    "Paste your website code and publish it. Real URL, HTTPS, and custom domain in under a minute.",
 };
 
 export default function RootLayout({
