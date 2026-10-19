@@ -18,7 +18,7 @@ export class CloudflareError extends Error {
   }
 }
 
-function isMockMode(): boolean {
+export function isMockMode(): boolean {
   return process.env.CLOUDFLARE_API_TOKEN === "your_cloudflare_api_token";
 }
 

@@ -59,6 +59,7 @@ Open your Supabase project → **SQL Editor** and run the files in `supabase/mig
 2. `002_logging_and_limits.sql` — build logs and per-user project limits
 3. `003_custom_domains.sql` — custom domain support
 4. `004_storage_setup.sql` — the `deployments` storage bucket
+5. `005_public_site_lookup.sql` — lets published sites be served at `/s/<site>`
 
 Core tables: `profiles`, `projects`, `deployments`, `domain_searches`. Every table has row-level security so users only see their own data.
 
@@ -105,7 +106,7 @@ Domain availability search uses the Cloudflare Registrar API — the same token 
 
 | Service | Placeholder value | Mock behaviour |
 |---|---|---|
-| Cloudflare Pages | `your_cloudflare_api_token` | Returns `https://mock.pages.dev` after a 2s delay |
+| Cloudflare Pages | `your_cloudflare_api_token` | Sites are served by the app itself at `/s/<site>` (sandboxed) instead of Cloudflare |
 | Cloudflare Registrar | `your_cloudflare_api_token` | Returns `.io` / `.co` / `.app` as available with prices |
 | Resend | `your_resend_api_key` | Email send is skipped silently (no error) |
 | Supabase | `your_supabase_project_url` | Auth redirects to `/login`; API routes return 401 |
@@ -165,11 +166,11 @@ GitHub Pages cannot host this app (it needs a Node.js server for auth, API route
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDinesh0013%2Flaunchpad&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,NEXT_PUBLIC_APP_URL&envDescription=Supabase%20keys%20and%20your%20public%20app%20URL&envLink=https%3A%2F%2Fgithub.com%2FDinesh0013%2Flaunchpad%23getting-api-keys&project-name=launchpad)
 
-1. Create a Supabase project and run the four migrations (see **SQL migrations**).
+1. Create a Supabase project and run the five migrations (see **SQL migrations**).
 2. Click the button, sign in to Vercel, and fill in the environment variables:
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
    - `NEXT_PUBLIC_APP_URL` — your Vercel URL, e.g. `https://launchpad.vercel.app`
-   - Optional: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `RESEND_API_KEY`. Without real Cloudflare keys, deploys run in mock mode.
+   - Optional: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `RESEND_API_KEY`. Without real Cloudflare keys, published sites are served by the app itself at `/s/<site>`.
 3. In Supabase → **Authentication → URL Configuration**, set Site URL to your Vercel URL and add `<your-url>/auth/callback` to Redirect URLs.
 
 Note: the deploy route allows up to 300s per request. Check that your Vercel plan supports that duration.

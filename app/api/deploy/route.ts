@@ -5,7 +5,7 @@ import os from "os";
 import path from "path";
 import fs from "fs";
 import { errRes, requireAuth } from "@/lib/api-auth";
-import { createCloudflareProject, deployToCloudflare } from "@/lib/cloudflare";
+import { createCloudflareProject, deployToCloudflare, isMockMode } from "@/lib/cloudflare";
 import { sendDeploySuccess, sendDeployFailed } from "@/lib/email";
 import { checkRateLimit } from "@/lib/ratelimit";
 import { BuildError, buildFromSource } from "@/lib/builder";
@@ -213,7 +213,12 @@ export async function POST(request: NextRequest) {
     await setStatus(supabase, project_id, deploymentId,
       "deploying", "deploying", `Uploading ${files.length} files to Cloudflare`);
 
-    const { url: deployedUrl } = await deployToCloudflare(cfProjectId, files);
+    const { url: cloudflareUrl } = await deployToCloudflare(cfProjectId, files);
+
+    // Without real Cloudflare credentials (mock mode) the site is served by this app itself.
+    const deployedUrl = isMockMode()
+      ? `${process.env.NEXT_PUBLIC_APP_URL ?? request.nextUrl.origin}/s/${project.subdomain}`
+      : cloudflareUrl;
 
     // ── Stage 5: propagating ───────────────────────────────────────────────────
     await setStatus(supabase, project_id, deploymentId,
