@@ -161,6 +161,23 @@ supabase/
 
 ---
 
+## Deploy to Vercel
+
+GitHub Pages cannot host this app (it needs a Node.js server for auth, API routes and builds). Use Vercel, Railway or Fly.io instead.
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FDinesh0013%2Flaunchpad&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,NEXT_PUBLIC_APP_URL&envDescription=Supabase%20keys%20and%20your%20public%20app%20URL&envLink=https%3A%2F%2Fgithub.com%2FDinesh0013%2Flaunchpad%23getting-api-keys&project-name=launchpad)
+
+1. Create a Supabase project and run the four migrations (see **SQL migrations**).
+2. Click the button, sign in to Vercel, and fill in the environment variables:
+   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+   - `NEXT_PUBLIC_APP_URL` — your Vercel URL, e.g. `https://launchpad.vercel.app`
+   - Optional: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `RESEND_API_KEY`. Without real Cloudflare keys, deploys run in mock mode.
+3. In Supabase → **Authentication → URL Configuration**, set Site URL to your Vercel URL and add `<your-url>/auth/callback` to Redirect URLs.
+
+Note: ZIP and link builds run `npm install` and a build inside the API route (up to 300s). Vercel plans limit function duration and memory, so heavy builds may fail there. A long-running Node host such as Railway or Fly.io suits that better.
+
+---
+
 ## Security notes
 
 - Never commit `.env.local`; it is gitignored. Rotate any key that has ever been exposed.

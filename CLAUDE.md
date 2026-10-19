@@ -14,7 +14,7 @@ deployed site in under 60 seconds. Hard cap: 20 sites per user.
 - Sentry (@sentry/nextjs 10.x) — error tracking, no-ops when SENTRY_DSN unset
 
 ## Host
-No production host configured yet. All API routes use `export const runtime = "nodejs"`.
+No production host configured yet (see "Deploy to Vercel" in README.md). All API routes use `export const runtime = "nodejs"`.
 The app requires a Node.js host (Vercel, Railway, Fly.io, etc.) — NOT Cloudflare
 Pages/Workers, because server-side routes need child_process and filesystem access
 for the upcoming build engine.
