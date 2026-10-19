@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, AlertTriangle } from "lucide-react";
+import SitePreview from "@/components/site-preview";
 
 const MAX_HTML_BYTES = 2 * 1024 * 1024; // keep in sync with /api/ingest/html
 
@@ -81,7 +82,7 @@ export default function NewSitePage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-zinc-900">Deploy a new site</h1>
         <p className="text-sm text-zinc-500 mt-1">
@@ -89,6 +90,7 @@ export default function NewSitePage() {
         </p>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
       <div className="space-y-4">
         <div>
           <label htmlFor="site-html" className="block text-sm font-medium text-zinc-700 mb-1.5">
@@ -174,6 +176,11 @@ export default function NewSitePage() {
             </Link>
           </div>
         )}
+      </div>
+
+      <div className="lg:sticky lg:top-6 lg:h-[34rem]">
+        <SitePreview html={html} />
+      </div>
       </div>
     </div>
   );
