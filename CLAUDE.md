@@ -1,204 +1,173 @@
 # LaunchPad — Claude Code context
 
+Last updated: 2026-10-19. Read this first; it is the project walkthrough plus the rules that keep it working.
+
 ## What this project is
-LaunchPad turns pasted HTML website code into a live Cloudflare Pages site for
-non-technical users. Users paste their website HTML into a text box and get a
-deployed site in under 60 seconds. Hard cap: 20 sites per user.
+LaunchPad turns pasted HTML into a public website link in under a minute. A user signs up with
+email + password, pastes one HTML page into a box (with a live preview), clicks Deploy, and gets a
+shareable URL. Hard cap: 20 sites per user.
+
+The plain-English description for end users lives in README.md (top section). Keep the two consistent.
+
+## Live deployment (as of 2026-10-19)
+| Thing | Value |
+|-------|-------|
+| App | https://launchpad-dinesh0013.vercel.app |
+| Published site URL pattern | `https://launchpad-dinesh0013.vercel.app/s/<subdomain>` |
+| GitHub | https://github.com/Dinesh0013/launchpad (public, branch `main`) |
+| Vercel project | `launchpad` (personal Hobby account, project id `prj_5OeyJWXCFOWGDqAC1VSgLa3vjMnj`) |
+| Supabase project | ref `pokjylilmjvklpvmizvg` (eu-west-1, org "Dinesh0013's Org") |
+| Cloudflare | MOCK MODE (placeholder token). Sites are served by this app, not Cloudflare. |
+
+**Vercel is NOT linked to GitHub**, so pushing to `main` does not deploy. Redeploy manually, either with
+the Vercel MCP `create_deployment` tool (`gitSource` = github, org `Dinesh0013`, repo `launchpad`, ref `main`,
+optional `sha`, `target: "production"`, `forceNew: "1"`) or by connecting the repo under Vercel → Settings → Git.
+A production build takes about 60–90 s. Env vars changed in Vercel only apply to the next deployment.
+
+Vercel env vars on the project: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+`NEXT_PUBLIC_APP_URL`, `SUPABASE_SERVICE_ROLE_KEY` (production, sensitive; currently unused by app code),
+and placeholder `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` / `RESEND_API_KEY` that switch on mock mode.
+Never write real keys into the repo or into chat; the user adds secrets in the Vercel/Supabase dashboards.
+
+## Walkthrough: what happens end to end
+1. **Sign up / log in** — `app/(auth)/signup` and `login` use Supabase email + password (`lib/supabase/client.ts`).
+   Email confirmation is required. Google/GitHub sign-in was REMOVED on purpose (and is disabled in Supabase).
+   Signing up with an already-confirmed email sends no email (Supabase hides account existence).
+   The "Forgot password?" link on the login page is a dead `href="#"` — there is no reset flow yet.
+2. **Auth guard** — `proxy.ts` (Next 16 name for middleware) redirects unauthenticated visitors from
+   `/dashboard/*` to `/login`. `/deploy/*` pages and all `/api/*` routes also call `supabase.auth.getUser()`.
+3. **Dashboard** — `app/dashboard/page.tsx` lists the user's sites (`components/project-card.tsx`);
+   `app/dashboard/projects/[id]/page.tsx` shows one site, domain tools and delete (`danger-zone.tsx`).
+4. **New site** — `app/dashboard/new/page.tsx`: textarea ("Website code") on the left, `components/site-preview.tsx`
+   on the right, site-name input, "Deploy now →" button. The preview renders the pasted code via `srcDoc` in an
+   `<iframe sandbox="allow-scripts allow-forms allow-popups allow-modals">` (no `allow-same-origin`), debounced 300 ms,
+   with empty / over-2 MB / "doesn't look like HTML" states. It never loads external pages.
+5. **Ingest** — the page POSTs `{ html, project_name }` to `app/api/ingest/html/route.ts`: requires login, rate limit
+   (10/hour), 2 MB cap, 20-site cap, creates a `projects` row (`source_type='html'`, `status='building'`, unique
+   `subdomain`), stores the HTML as `index.html` in Supabase Storage bucket `deployments` at
+   `{user_id}/{project_id}/index.html`, and returns `{ project_id, subdomain }`. If `lib/formcheck.ts` detects a
+   backend-wired form it also returns `warning: "BACKEND_FORM"`; the UI shows an amber "Deploy anyway" box.
+6. **Deploy** — the client fires `POST /api/deploy` (not awaited) and navigates to `/deploy/[project_id]`.
+   `app/api/deploy/route.ts` pulls the files back from storage (`lib/fsbuild.ts`), runs `lib/builder.ts`
+   (a lone `index.html` is treated as pre-built static), creates/reuses a Cloudflare project and "deploys"
+   (`lib/cloudflare.ts`). In mock mode the live URL is `${NEXT_PUBLIC_APP_URL}/s/${subdomain}` instead of Cloudflare's.
+7. **Progress** — `components/deploy/DeployProgress.tsx` polls `GET /api/projects/[id]/status` every 3 s and shows
+   7 stages plus a build-log panel. On `live` it shows the URL, "Visit site", and the domain picker.
+8. **Published site** — `app/s/[subdomain]/route.ts` is public. It calls the SQL function `get_site_path()` (anon-callable,
+   `SECURITY DEFINER`, returns `user_id/project_id` only for `status='live'` projects), downloads `index.html` from the
+   public bucket, and returns it with `Content-Security-Policy: sandbox allow-scripts allow-forms allow-popups allow-modals`.
+   The sandbox gives user HTML an opaque origin so pasted scripts cannot read app cookies or call APIs as the visitor.
+   Side effect: pages that use `localStorage`/cookies will not work.
 
 ## Stack
-- Next.js 16 (App Router; auth guard lives in proxy.ts, formerly middleware.ts), TypeScript
-- Tailwind CSS + shadcn/ui
-- Supabase (auth + Postgres + Storage)
-- Cloudflare Pages (deployment target — static file upload only, see below)
-- Resend (transactional email on deploy success)
-- Sentry (@sentry/nextjs 10.x) — error tracking, no-ops when SENTRY_DSN unset
+- Next.js 16 (App Router, Turbopack), React 18 (deprecated by Next 16 — upgrade to 19 is a sensible follow-up), TypeScript
+- Tailwind CSS 3 + a small amount of shadcn/ui
+- Supabase: auth, Postgres (RLS on every table), Storage
+- Cloudflare Pages via Wrangler (only when real credentials are set), Resend (email, mocked), Sentry (no-op without DSN)
+- Node ≥ 20.9 required (`engines.node` in package.json)
 
-## Host
-No production host configured yet (see "Deploy to Vercel" in README.md). All API routes use `export const runtime = "nodejs"`.
-The app requires a Node.js host (Vercel, Railway, Fly.io, etc.) — NOT Cloudflare
-Pages/Workers, because server-side routes need child_process and filesystem access
-for the upcoming build engine.
+## Repo map
+```
+app/
+  page.tsx, layout.tsx, error.tsx, not-found.tsx   marketing homepage + shell
+  (auth)/login, signup, logout                     email+password auth pages / sign-out route
+  auth/callback/route.ts                           email-confirmation code exchange
+  dashboard/                                       site list, new-site wizard, project detail
+  deploy/[project_id]/                             deploy progress page
+  s/[subdomain]/route.ts                           PUBLIC published-site server (sandboxed)
+  api/ingest/html/route.ts                         the only ingest route
+  api/deploy/route.ts                              build + publish pipeline
+  api/projects/[id]/(route|status)                 PATCH/DELETE project; status polling
+  api/domains/(search|connect|status/[domain])     custom-domain tooling (needs real Cloudflare)
+components/  site-preview, navbar, project-card, danger-zone, domain-section, domains/DomainPicker,
+             deploy/DeployProgress, copy-url-button, word-cycle, ui/skeleton
+lib/         api-auth (requireAuth), supabase/(client|server), builder, fsbuild, cloudflare, logger, ratelimit,
+             subdomain, limits, formcheck, email, domains, domain-search, utils
+proxy.ts                         auth guard for /dashboard
+supabase/migrations/001..005     database + storage setup (run in order)
+tests/                           Playwright specs (see Tests)
+eslint.config.mjs                ESLint 9 flat config (replaces .eslintrc.json; `next lint` no longer exists)
+```
 
-## Input method (UI)
-Only one: paste HTML into a textarea on /dashboard/new → POST /api/ingest/html ({ html, project_name }, max 2 MB).
-The route stores it as index.html in Supabase Storage. GitHub, ZIP and "paste a link" ingest were removed on purpose.
-- risk='backend' form detected → 200 + { warning:'BACKEND_FORM', message } — UI shows inline amber warning, deploy still proceeds
-- source_type is 'html'
+## Database and migrations (run in order in the Supabase SQL editor, or via the Supabase MCP)
+1. `001_initial_schema.sql` — profiles, projects, deployments, domain_searches, RLS, signup trigger `handle_new_user`
+2. `002_logging_and_limits.sql` — build_logs, deployments.stage
+3. `003_custom_domains.sql` — custom_domain_status/cname/added_at
+4. `004_storage_setup.sql` — public bucket `deployments` + policy `allow_all_deployments`
+5. `005_public_site_lookup.sql` — `get_site_path(text)` for the public `/s/[subdomain]` route
 
-## Cloudflare Pages deploy strategy
-**CF Pages build-from-source is NOT used and NOT available.**
-All deployments are pre-built static file uploads:
-1. Ingest stores files to Supabase Storage at `{user_id}/{project_id}/`.
-2. Deploy route reads those files back, creates a CF Pages project, and POSTs them
-   as multipart FormData to `/pages/projects/{name}/deployments`.
-3. The upcoming build engine (P2+) will run `npm install && npm run build` server-side
-   in a temp directory, then upload the built `dist/` output via this same path.
-
-## Deploy flow (current)
-1. User pastes HTML via /dashboard/new
-2. Ingest API validates, enforces 20-project cap, stores files to Supabase Storage,
-   creates project row (status='building')
-3. Client fires POST /api/deploy (non-blocking) and navigates to /deploy/[project_id]
-4. Deploy route emits all 7 intermediate statuses as it progresses (see pipeline below)
-5. GET /api/projects/[id]/status polled every 3s by DeployProgress component
-6. On status='live', user sees success card with live URL
-
-## Deploy pipeline — status values (all now fully emitted, not cosmetic)
-Each transition calls setStatus() which updates BOTH projects.status AND deployments.stage:
-
-  building     → initial mark at route entry (direct supabase.update, before try block)
-  validating   → before materializeFromStorage (stage 0)
-  uploading    → after materialize, before buildFromSource (stage 2)
-  provisioning → after build + collectFiles, before CF project check (stage 3)
-  deploying    → after CF project ready, before deployToCloudflare (stage 4)
-  propagating  → after deployToCloudflare returns (stage 5)
-  live         → final success write (stage 6) — also sets cloudflare_deploy_url
-  failed       → error catch block — stores real error message in deployments.build_log
-
-## Status endpoint (GET /api/projects/[id]/status)
-Returns: { status, cloudflare_deploy_url, subdomain, stage, buildLogs }
-  - status: projects.status (coarse state)
-  - stage: deployments.stage from latest deployment (fine-grained pipeline step)
-  - buildLogs: last 20 rows from build_logs, ordered asc by created_at,
-    each { stage, level, message, created_at }
-
-## Progress UI (components/deploy/DeployProgress.tsx)
-- Stage mapping uses BOTH status AND stage fields from the API response.
-- No artificial cycling between stages — all 7 stages reflect real backend state.
-- Build log panel (dark, monospace, max-height 200px) shows real log lines below the
-  stage list while deploy is in progress or failed. Auto-scrolls to bottom.
-- info=gray, warn=amber, error=red log line colors.
-
-## Host requirements
-The deploy route sets `export const maxDuration = 300` (5 min). The host MUST support
-≥300s function duration. If the host caps lower (e.g. Vercel Hobby plan = 60s), the
-build step must be moved to a background worker / queue (noted as future work, not built).
-Set BUILD_TIMEOUT_MS env var to override the 180s per-command timeout.
-
-## Logging
-- build_logs table: per-project, per-deployment log rows with stage + level + message.
-- lib/logger.ts: logBuild() inserts a row + emits console.{level}. Never throws.
-- Sentry: captureException() in catch blocks of ingest/html and deploy routes.
-
-## Key files
-- app/dashboard/new/page.tsx              → new project form (paste HTML)
-- app/deploy/[project_id]/page.tsx        → deployment progress page
-- components/deploy/DeployProgress.tsx    → 7-stage animated progress component
-- app/api/ingest/html/route.ts            → pasted HTML ingestion
-- app/api/deploy/route.ts                 → Cloudflare Pages deployment
-- app/api/projects/[id]/status/route.ts   → status polling endpoint
-- lib/cloudflare.ts                       → Cloudflare API wrapper (cfBase() lazy getter)
-- lib/logger.ts                           → logBuild() — build log insertion
-- lib/limits.ts                           → MAX_PROJECTS_PER_USER = 20
-- lib/api-auth.ts                         → requireAuth() — uses getUser() (JWT-validated)
-- lib/subdomain.ts                        → subdomain generation + uniqueness check
-- lib/formcheck.ts                        → detectBackendForm() — classifies form risk (none/external/backend)
-- supabase/migrations/001_initial_schema.sql → profiles, projects, deployments, domain_searches
-- supabase/migrations/002_logging_and_limits.sql → build_logs, deployments.stage column
+All five are applied to Supabase project `pokjylilmjvklpvmizvg`. A freshly restored Supabase project may need a few
+minutes before `storage.buckets` exists; migration 004 fails until Storage has initialised.
 
 ## Commands
-- dev:          npm run dev
-- build:        npm run build
-- type-check:   npx tsc --noEmit
-- lint:         npm run lint
-- full suite:   npx playwright test --reporter=line
-- single spec:  npx playwright test tests/{name}.spec.ts --reporter=line
+- dev: `npm run dev` (Next 16 allows only ONE dev server per folder; a second errors with "Another next dev server is already running")
+- build: `npm run build`
+- type-check: `npm run typecheck` (after deleting routes, stale `.next/types` cause errors: delete `.next/types` or rebuild)
+- lint: `npm run lint` (`eslint .`)
+- tests: `npm test` (`playwright test`; uses installed Chrome)
+- If a dev server already owns port 3000, test against a production server: `npm run build` then `npx next start -p 3099`.
 
-## Test suite
-| Spec file | What it tests | Notes |
-|-----------|--------------|-------|
-| tests/smoke.spec.ts | Landing page renders, branding, features section, "Ship in three steps" copy | Browser, always runs |
-| tests/logger.spec.ts | build_logs table insert + read-back via Supabase REST | Skips if migration 002 not applied or no Supabase credentials |
-| tests/builder.spec.ts | Framework detection, real Vite build (Fixture A), SSR rejection, next-static detection | Node-based, Fixture A allowed 180s |
-| tests/formcheck.spec.ts | detectBackendForm risk classification (8 cases) | Node-based, no browser |
-| tests/deploy-idempotency.spec.ts | CF project creation skipped on redeploy (mock Supabase) | Node-based |
-| tests/progress.spec.ts | setStatus helper: projects + deployments + build_logs updates (9 cases) | Node-based, mock Supabase |
-| tests/e2e-error.spec.ts | SSR error, deploy failure UI, Try again routing, project limit error (paste-HTML flow) | Browser E2E — skips if TEST_USER_EMAIL/PASSWORD not set |
+## Tests
+| Spec | What it covers | Notes |
+|------|----------------|-------|
+| smoke.spec.ts | landing page renders, no console errors | browser |
+| formcheck.spec.ts | `detectBackendForm` classification | node |
+| builder.spec.ts | framework detection, real Vite build, SSR rejection | node, slow (npm install) |
+| deploy-idempotency.spec.ts, redeploy.spec.ts | Cloudflare project not re-created on redeploy | node, mock Supabase |
+| progress.spec.ts | `setStatus` updates projects/deployments/build_logs | node, mock Supabase |
+| domains.spec.ts | domain connect validation | node |
+| logger.spec.ts | build_logs round trip against real Supabase | skips on placeholder/unreachable Supabase |
+| e2e-error.spec.ts | paste-HTML flow error states, failed-deploy UI | browser; skips without TEST_USER_EMAIL/PASSWORD |
 
-E2E tests use Playwright route interception (page.route) — no real CF or Supabase API calls are made inside
-the browser during E2E tests. However, both /dashboard and /deploy layouts call supabase.auth.getUser()
-server-side, so real Supabase credentials and a test user are required. Set in .env.local:
-  TEST_USER_EMAIL=test@example.com
-  TEST_USER_PASSWORD=test-password
+Last full run: 47 passed, 6 skipped (auth-required E2E). The paste/preview UI and `/s/<site>` were verified manually in a
+browser against real data; there is no automated test for them yet (the wizard sits behind login).
 
-logger.spec.ts requires migration 002 applied to local Supabase:
-  supabase/migrations/002_logging_and_limits.sql
+## Deploy pipeline — status values
+`setStatus()` updates both `projects.status` and `deployments.stage`:
+building → validating → uploading → provisioning → deploying → propagating → live (or failed, with the real error stored in
+`deployments.build_log`). `GET /api/projects/[id]/status` returns `{ status, cloudflare_deploy_url, subdomain, stage, buildLogs }`
+(last 20 `build_logs` rows). `lib/logger.ts` `logBuild()` inserts a row and never throws. The deploy route sets `maxDuration = 300`;
+the host must allow ≥ 300 s. `BUILD_TIMEOUT_MS` overrides the 180 s per-step build timeout.
 
-## Known gaps remaining
-- E2E tests run fully only with real Supabase credentials + test user (TEST_USER_EMAIL / TEST_USER_PASSWORD).
+## Custom domains
+Routes `api/domains/search|connect|status` and `components/domains/DomainPicker.tsx` exist but only do real work with a real Cloudflare
+token. In mock mode they return placeholder data. The app never buys domains; users point a CNAME at their Pages hostname.
 
-## Known Recurring Issues — Do Not Regress
+## History: what changed and why (so nobody "restores" removed things by accident)
+- Exported from Lovable, then published to GitHub with an MIT license (commits use the GitHub noreply email).
+- Dependencies: Next 14 → 16.4, ESLint 8 → 9 (flat config), `middleware.ts` → `proxy.ts`, async `params` everywhere,
+  async cookie adapter in `lib/supabase/server.ts`, `adm-zip` removed. `npm audit --omit=dev` reports 0 vulnerabilities.
+- REMOVED on purpose (user request): Google and GitHub sign-in; ZIP upload; GitHub-repo ingest; "paste a link" ingest
+  (`/api/ingest/github|url|upload`, `lib/zip.ts`, their E2E specs). The only input is pasted HTML via `/api/ingest/html`.
+  Do not re-add them without asking. (The old guardrail "never delete /api/ingest/url" is obsolete.)
+- ADDED: live preview (`site-preview.tsx`), in-app hosting (`/s/[subdomain]` + migration 005), Vercel deployment, plain-English README.
+- Bug found and fixed: "Visit site" opened `https://mock.pages.dev` because mock mode returned a hardcoded URL.
+  Existing mock rows were backfilled to the `/s/<subdomain>` URL.
 
-### 1. Supabase deployments bucket
-- Bucket 'deployments' must exist and be PUBLIC
-- RLS policy 'allow_all_deployments' must allow ALL operations
-- Migration: supabase/migrations/004_storage_setup.sql
-- Symptom when missing: UNKNOWN_FRAMEWORK error on every deploy
-- Fix: apply 004_storage_setup.sql in Supabase SQL Editor
-- NEVER remove or modify the bucket or its policy
+## Open risks / follow-ups (not done yet)
+1. **Storage bucket is world-writable.** Policy `allow_all_deployments` (migration 004) lets anyone with the public anon key
+   read, overwrite or delete any object in `deployments`, and published sites depend on that bucket. Fix: keep public SELECT,
+   restrict INSERT/UPDATE/DELETE to `authenticated` users whose first path segment equals `auth.uid()`; then re-test a deploy.
+2. No password-reset flow ("Forgot password?" is a dead link).
+3. No automated test for the paste/preview wizard or `/s/<site>`.
+4. Real Cloudflare publishing is off. Turning it on for a public app needs abuse controls (captcha on signup, lower site cap, approval/allowlist).
+5. Vercel is not git-linked (manual redeploys). `SUPABASE_SERVICE_ROLE_KEY` on Vercel is unused and can be deleted.
+6. Supabase email uses the built-in mailer (low hourly limit); add custom SMTP before real traffic.
+7. React 18 is deprecated by Next 16; a stray `package-lock.json` in the parent folder triggers a Next warning locally only.
 
-### 2. Supabase storage list() trailing slash
-- lib/fsbuild.ts basePath must end with trailing slash
-- Symptom: COUNT 0 even when files exist in storage
-- Fix: ensure basePath = `${userId}/${projectId}/`
-- NEVER remove the trailing slash from basePath
-
-### 3. CF Pages manifest field
-- deployToCloudflare uses Wrangler CLI (npx wrangler pages deploy)
-- NEVER revert to the direct CF API multipart upload
-- The direct API requires a manifest with SHA256 hashes
-  which caused 400/500 errors and hours of debugging
-
-### 4. FormData Content-Type header
-- NEVER manually set Content-Type on multipart FormData fetches
-- Let fetch set it automatically with the correct boundary
-
-### 5. getSession() vs getUser()
-- ALWAYS use supabase.auth.getUser() in API routes
-- NEVER use getSession() — it does not verify the JWT
+## Known recurring issues — do not regress
+1. Supabase `deployments` bucket must exist and be PUBLIC (migration 004). A missing bucket shows as `UNKNOWN_FRAMEWORK` on every deploy.
+   (If you tighten the policy, keep public read and re-test a full deploy.)
+2. `lib/fsbuild.ts` base path must end with a trailing slash (`${userId}/${projectId}/`) or storage `list()` returns 0 files.
+3. Real Cloudflare deploys use the Wrangler CLI (`npx wrangler pages deploy`); never go back to the raw multipart API (needs a SHA256 manifest).
+4. Never set `Content-Type` manually on multipart `FormData` fetches.
+5. In API routes always use `supabase.auth.getUser()`, never `getSession()` (it does not verify the JWT).
+6. The `/s/[subdomain]` response must keep the CSP `sandbox` header: it serves user-controlled HTML on the app's own origin.
 
 ## Guardrails — never do these
-- Commit .env or .env.local
-- Change shadcn component internals directly
-- Use supabase.auth.getSession() in API routes — always use getUser() (enforced in requireAuth)
-- Assume CF Pages build-from-source is available — it is not; all deploys are server-side builds
-  uploaded as pre-built static files via the CF Pages multipart FormData API
-- Deploy the Next.js app itself to Cloudflare Pages/Workers — Node.js runtime required (child_process
-  and filesystem access needed for the build engine)
-- Host must allow ≥300s function timeout (the deploy route sets maxDuration=300).
-  If platform caps lower (e.g. Vercel Hobby = 60s), the build engine must move to a background worker.
-  BUILD_TIMEOUT_MS env var controls the per-step build timeout (default 180s).
-- Exceed MAX_PROJECTS_PER_USER = 20 — enforced in the ingest route (lib/limits.ts)
-- BACKEND_FORM warning: html ingest returns { warning:'BACKEND_FORM', message } when a backend-wired
-  form is detected; deploy still proceeds — the warning is informational only
-- source_type valid value: 'html'
-
-## Custom Domain
-
-### API routes
-- Search:  POST /api/domains/search   — { query } → { query, suggestions[] } (TLDs: .com .co .io .app .dev .net)
-- Connect: POST /api/domains/connect  — { project_id, domain } → { success, domain, cname_target, status, message }
-- Status:  GET  /api/domains/status/[domain] → { domain, status, verified, cname_target, project_id }
-
-### Component
-- components/domains/DomainPicker.tsx — standalone UI for search → results → confirm → connected flow
-  - Props: { projectId, projectName, currentDomain?, onConnected? }
-  - Used in: project detail page (app/dashboard/projects/[id]/page.tsx) and deploy success card
-
-### DB columns added by migration 003 (on top of 001's custom_domain + custom_domain_verified)
-- custom_domain_status  text DEFAULT 'none'   — 'none'|'pending'|'active'|'failed'
-- custom_domain_cname   text                  — the .pages.dev target the user points DNS to
-- custom_domain_added_at timestamptz
-
-### Logic lib
-- lib/domain-search.ts — domainSearchSchema, extractName, buildSuggestions, validateProjectForDomain, TLD_PRICES
-  - CF Registrar check: GET /registrar/domains/{domain} (404=available, 200=taken); falls back to DNS
-  - Confidence: 'high' for CF results, 'low' for DNS fallback
-- lib/cloudflare.ts addCustomDomain() — POST /pages/projects/{name}/domains
-
-### Design decisions
-- LaunchPad does NOT purchase domains — it only connects existing ones to Cloudflare Pages
-- User must own the domain and set a CNAME record pointing to {subdomain}.pages.dev
-- connect route requires project.status='live' and cloudflare_project_id set
-- Search rate limit: 10/hour per user; connect rate limit: 10/hour per user
-- PATCH /api/projects/[id] with { custom_domain: null } clears all domain columns
+- Commit `.env` / `.env.local`, or put real keys in code, docs or chat.
+- Edit shadcn component internals directly.
+- Deploy the app itself to Cloudflare Pages/Workers (it needs Node.js: child_process and filesystem access).
+- Exceed `MAX_PROJECTS_PER_USER = 20` (`lib/limits.ts`, enforced in the ingest route).
+- Remove the iframe `sandbox` on the preview, or add `allow-same-origin` to it or to the `/s/` CSP.
+- Re-introduce OAuth sign-in or ZIP/GitHub/URL ingest, or publish to a real Cloudflare account, without being asked.
