@@ -21,30 +21,6 @@ interface Call {
 function makeMockSupabase() {
   const calls: Call[] = [];
 
-  function makeChain(table: string, op: "update" | "insert", data: Record<string, unknown>) {
-    const cond: Record<string, unknown> = {};
-    const chain = {
-      eq(col: string, val: unknown) {
-        cond[col] = val;
-        return chain;
-      },
-      then(resolve: (v: object) => void) {
-        calls.push({ table, op, data, conditions: { ...cond } });
-        resolve({});
-      },
-      // Make it thenable so await works
-      [Symbol.toStringTag]: "Promise",
-    };
-    // Record immediately for non-awaited paths too
-    return {
-      eq(col: string, val: unknown) {
-        cond[col] = val;
-        calls.push({ table, op, data, conditions: { ...cond } });
-        return { eq: () => Promise.resolve({}) };
-      },
-    };
-  }
-
   const supabase = {
     from(table: string) {
       return {

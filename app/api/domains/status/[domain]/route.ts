@@ -17,14 +17,15 @@ function isMockMode(): boolean {
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { domain: string } }
+  { params }: { params: Promise<{ domain: string }> }
 ) {
   try {
+    const { domain: rawDomain } = await params;
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
     const { user, supabase } = auth;
 
-    const domain = decodeURIComponent(params.domain);
+    const domain = decodeURIComponent(rawDomain);
 
     const { data: project, error: projectError } = await supabase
       .from("projects")

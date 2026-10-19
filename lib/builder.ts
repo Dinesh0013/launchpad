@@ -268,7 +268,7 @@ export async function buildFromSource({
   // For build-script fallback, scan candidates in priority order to find actual output
   let resolvedOutDir = outDir;
   if (framework === "script") {
-    for (const dir of ["dist", "out", "build"].map((d) => path.join(sourceDir, d))) {
+    for (const dir of ["dist", "out", "build"].map((d) => path.join(/*turbopackIgnore: true*/ sourceDir, d))) {
       try {
         await fs.promises.access(path.join(dir, "index.html"));
         resolvedOutDir = dir;

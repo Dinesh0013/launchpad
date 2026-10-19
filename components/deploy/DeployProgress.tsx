@@ -77,12 +77,13 @@ export default function DeployProgress({ projectId, projectName }: Props) {
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const startTimeRef = useRef(Date.now());
+  const startTimeRef = useRef(0);
   const resolvedRef = useRef(false);
   const logPanelRef = useRef<HTMLDivElement>(null);
 
   // Elapsed second counter
   useEffect(() => {
+    startTimeRef.current = Date.now();
     timerRef.current = setInterval(() => {
       setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
     }, 1000);

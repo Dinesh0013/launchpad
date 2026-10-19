@@ -164,7 +164,8 @@ supabase/
 ## Security notes
 
 - Never commit `.env.local`; it is gitignored. Rotate any key that has ever been exposed.
-- Known: `npm audit` still reports an advisory against Next.js 14.x that is only fixed by upgrading to Next 16. Plan that upgrade before running this in production.
+- `npm audit --omit=dev` reports 0 vulnerabilities. Remaining dev-only advisories come from Tailwind 3 build tooling.
+- Requires Node.js 20.9 or newer (Next.js 16). React 18 still works but is deprecated by Next 16; moving to React 19 is a sensible follow-up.
 
 ## License
 

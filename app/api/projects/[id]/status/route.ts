@@ -5,9 +5,10 @@ export const runtime = "nodejs";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
     const { user, supabase } = auth;
@@ -15,7 +16,7 @@ export async function GET(
     const { data: project, error } = await supabase
       .from("projects")
       .select("status, cloudflare_deploy_url, subdomain")
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -26,7 +27,7 @@ export async function GET(
     const { data: latestDeployment } = await supabase
       .from("deployments")
       .select("stage")
-      .eq("project_id", params.id)
+      .eq("project_id", id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -35,7 +36,7 @@ export async function GET(
     const { data: buildLogs } = await supabase
       .from("build_logs")
       .select("stage, level, message, created_at")
-      .eq("project_id", params.id)
+      .eq("project_id", id)
       .order("created_at", { ascending: true })
       .limit(20);
 

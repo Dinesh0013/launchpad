@@ -5,8 +5,9 @@ import DeployProgress from "@/components/deploy/DeployProgress";
 export default async function DeployPage({
   params,
 }: {
-  params: { project_id: string };
+  params: Promise<{ project_id: string }>;
 }) {
+  const { project_id } = await params;
   const supabase = createClient();
   const {
     data: { user },
@@ -17,13 +18,13 @@ export default async function DeployPage({
   const { data: project } = await supabase
     .from("projects")
     .select("name")
-    .eq("id", params.project_id)
+    .eq("id", project_id)
     .eq("user_id", user.id)
     .maybeSingle();
 
   return (
     <DeployProgress
-      projectId={params.project_id}
+      projectId={project_id}
       projectName={project?.name ?? undefined}
     />
   );

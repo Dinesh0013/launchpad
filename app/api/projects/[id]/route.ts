@@ -10,9 +10,10 @@ const patchSchema = z.object({
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
     const { user, supabase } = auth;
@@ -36,7 +37,7 @@ export async function PATCH(
     const { data: project, error: fetchError } = await supabase
       .from("projects")
       .select("id")
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -55,7 +56,7 @@ export async function PATCH(
           custom_domain_added_at: null,
         }),
       })
-      .eq("id", params.id);
+      .eq("id", id);
 
     if (updateError) return errRes("Failed to update project", "DB_ERROR", 500);
 
@@ -68,9 +69,10 @@ export async function PATCH(
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
     const { user, supabase } = auth;
@@ -78,7 +80,7 @@ export async function DELETE(
     const { data: project, error: fetchError } = await supabase
       .from("projects")
       .select("id")
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -88,7 +90,7 @@ export async function DELETE(
     const { error: deleteError } = await supabase
       .from("projects")
       .delete()
-      .eq("id", params.id);
+      .eq("id", id);
 
     if (deleteError) return errRes("Failed to delete project", "DB_ERROR", 500);
 

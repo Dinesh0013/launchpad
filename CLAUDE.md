@@ -6,7 +6,7 @@ non-technical users. Users paste a GitHub repo URL or upload a ZIP and get a
 deployed site in under 60 seconds. Hard cap: 20 sites per user.
 
 ## Stack
-- Next.js 14.2 (App Router), TypeScript
+- Next.js 16 (App Router; auth guard lives in proxy.ts, formerly middleware.ts), TypeScript
 - Tailwind CSS + shadcn/ui
 - Supabase (auth + Postgres + Storage)
 - Cloudflare Pages (deployment target — static file upload only, see below)

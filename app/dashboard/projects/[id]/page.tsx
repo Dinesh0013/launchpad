@@ -37,8 +37,9 @@ type Project = {
 export default async function ProjectPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   let project: Project;
   let deployments: Deployment[] = [];
 
@@ -55,7 +56,7 @@ export default async function ProjectPage({
       .select(
         "id, name, status, cloudflare_deploy_url, custom_domain, custom_domain_status, custom_domain_cname, last_deployed_at, created_at"
       )
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -65,7 +66,7 @@ export default async function ProjectPage({
     const { data: deps } = await supabase
       .from("deployments")
       .select("id, status, deployed_url, build_log, created_at")
-      .eq("project_id", params.id)
+      .eq("project_id", id)
       .order("created_at", { ascending: false })
       .limit(5);
 
