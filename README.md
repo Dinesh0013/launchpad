@@ -1,8 +1,44 @@
 # LaunchPad
 
-LaunchPad lets you deploy websites in under 30 seconds — paste your website HTML and get a live HTTPS URL instantly. It handles building, deploying to Cloudflare Pages, custom domains, and email notifications with no technical setup required.
+**Turn a web page into a real website link in under a minute. No coding tools and no hosting accounts needed.**
+
+### 👉 Try it here: https://launchpad-dinesh0013.vercel.app
 
 ---
+
+## What does it do?
+
+You have a web page, which is just a bit of HTML code. Maybe you wrote it, or an AI tool like ChatGPT or Claude made it for you, or you adapted a template.
+
+Normally, to put that page on the internet you'd need to rent hosting and learn how to upload files. LaunchPad skips all that. **You paste your code into a box, press a button, and get a link that anyone in the world can open.** That's it.
+
+## How to use it
+
+1. Open **https://launchpad-dinesh0013.vercel.app** and click **Sign up**.
+2. Enter your email and a password (at least 8 characters). You'll get an email. Click the link inside to confirm. If you don't see it, check your spam folder.
+3. Log in and click **Deploy new site**.
+4. **Paste your page's HTML code** into the box on the left. A live preview of your page appears on the right as you type, so you can check it looks right.
+5. Give your site a name and click **Deploy now**.
+6. Wait a few seconds, then click **Visit site**. Copy that address and share it with anyone.
+
+Your site's address will look like `https://launchpad-dinesh0013.vercel.app/s/your-site-name`.
+
+## Good to know
+
+- **One page at a time.** Paste a single HTML page. Put your styling and scripts inside it (inside `<style>` and `<script>` tags). You can't upload separate files such as images, so link to images using their web address (`https://...`).
+- **Size limit:** up to 2 MB of code per site.
+- **Up to 20 sites** per account.
+- **Contact forms:** a form that needs a server behind it won't send messages by itself. LaunchPad will warn you if it spots one.
+- **Your page runs in a protected box.** It can't see anyone's account or data. Because of that, some things that rely on the browser remembering data (like saved logins) may not work.
+- This is a free hobby project, so there are no guarantees about uptime. Don't put anything private on a published page, because anyone with the link can see it.
+
+---
+
+## For developers
+
+Everything below is technical setup for people who want to run their own copy of LaunchPad.
+
+It is built with Next.js, Supabase (login, database, file storage) and Vercel. Published sites are served by the app itself at `/s/<site>`, inside a sandbox. Cloudflare Pages publishing is optional (see Mock mode below).
 
 ## Local setup
 
